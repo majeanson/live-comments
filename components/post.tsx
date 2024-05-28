@@ -14,41 +14,16 @@ import type { Post as PostType, Author as AuthorType } from '@/lib/prisma/api';
 import Ably from 'ably';
 import { AblyProvider } from 'ably/react';
 
-function AblyPost({ post: initialPost }: { post: PostType }) {
-  const model = useModel(initialPost.id);
-  if (!model) {
+function Post({ post: initialPost }: { post: PostType }) {
+  const { setAlert } = useAlert();
+  const [post, model] = useModel(initialPost.id);
+
+  if (!model || !post) {
     return <PostPlaceholder />;
   }
 
-  return <Post model={model} />;
-}
-
-
-function Post({ model }: { model: ModelType }) {
-  const { setAlert } = useAlert();
-  const [post, setPost] = useState<PostType>(model.data.confirmed);
-
-  useEffect(() => {
-    const onUpdate = (err: Error | null, post?: PostType) => {
-      if (err) {
-        console.error(err);
-        return;
-      }
-      setPost(post!);
-    };
-
-    if (model.state !== 'disposed') {
-      // The model can get disposed based on the order that the hooks are processed on hot-reload
-      // which would cause an error that we're subscribing to a disposed model.
-      model.subscribe(onUpdate);
-    }
-
-    return () => {
-      model.unsubscribe(onUpdate);
-    };
-  }, [model]);
-
   async function onAdd(author: AuthorType, postId: number, content: string) {
+    if (!model) return;
     const mutationId = uuidv4();
     const [confirmed, cancel] = await model.optimistic({
       mutationId: mutationId,
@@ -68,6 +43,7 @@ function Post({ model }: { model: ModelType }) {
   }
 
   async function onEdit(commentId: number, content: string) {
+    if (!model || !post) return;
     const mutationId = uuidv4();
     const editedComment = { ...post.comments.findLast((c) => c.id === commentId)!, content: content, optimistic: true };
     const [confirmed, cancel] = await model.optimistic({
@@ -88,6 +64,7 @@ function Post({ model }: { model: ModelType }) {
   }
 
   async function onDelete(commentId: number) {
+    if (!model) return;
     const mutationId = uuidv4();
     const [confirmed, cancel] = await model.optimistic({
       mutationId: mutationId,
@@ -133,7 +110,7 @@ export default function PostWrapper({ user, post: initialPost }: { user: AuthorT
       <AuthorProvider author={user}>
         <AlertProvider>
           <AlertContainer />
-          <AblyPost post={initialPost}/>
+          <Post post={initialPost}/>
         </AlertProvider>
       </AuthorProvider>
     </AblyProvider>
